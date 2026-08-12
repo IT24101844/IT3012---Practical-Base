@@ -2,6 +2,60 @@
 import random
 import tkinter as tk
 
+class SimpleReflexAgent:
+    """An agent that uses only the current percept."""
+
+    def sense_and_act(self, percept):
+        # Condition-action rules
+        if percept['food_here']:
+            return 'Suck'
+
+        if percept['wall_ahead']:
+            return 'TurnLeft'
+
+        return 'MoveForward'
+
+class ModelBasedAgent:
+    """An agent that remembers its previous percepts and actions."""
+
+    def __init__(self):
+        self.percept_history = []
+        self.last_action = None
+        self.repeat_count = 0
+
+    def sense_and_act(self, percept):
+        # Update the internal state
+        self.percept_history.append({
+            'percept': percept.copy(),
+            'last_action': self.last_action
+        })
+
+        # Check whether the current percept is repeating
+        if len(self.percept_history) >= 2:
+            previous_percept = self.percept_history[-2]['percept']
+
+            if percept == previous_percept:
+                self.repeat_count += 1
+            else:
+                self.repeat_count = 0
+
+        # Condition-action rules that use memory
+        if percept['food_here']:
+            action = 'Suck'
+
+        elif self.repeat_count >= 2:
+            # Choose a different direction when a loop is detected
+            action = 'TurnRight'
+            self.repeat_count = 0
+
+        elif percept['wall_ahead']:
+            action = 'TurnLeft'
+
+        else:
+            action = 'MoveForward'
+
+        self.last_action = action
+        return action
 
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
@@ -10,6 +64,7 @@ class VisualGridHuntGame:
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.facing = 'Up'
 
         if custom_walls is not None:
             self.walls = set(custom_walls)
@@ -61,43 +116,92 @@ class VisualGridHuntGame:
         self.collision = False
 
     def get_percept(self) -> dict:
+        # Find the cell directly in front of the agent
+        next_x, next_y = self.agent_pos
+
+        if self.facing == 'Up':
+            next_y += 1
+        elif self.facing == 'Down':
+            next_y -= 1
+        elif self.facing == 'Left':
+            next_x -= 1
+        elif self.facing == 'Right':
+            next_x += 1
+
+        next_position = (next_x, next_y)
+
+        # Check whether the next cell is outside the grid
+        outside_grid = (
+            next_x < 0
+            or next_x >= self.width
+            or next_y < 0
+            or next_y >= self.height
+        )
+
+        # Return only local information
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'collision': self.collision,
-            'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'wall_ahead': outside_grid or next_position in self.walls,
+            'food_here': tuple(self.agent_pos) in self.food_positions,
+            'toxin_here': tuple(self.agent_pos) in self.toxic_traps
         }
 
     def execute_action(self, action: str):
         self.steps += 1
         new_pos = list(self.agent_pos)
 
-        if action == 'Up':
-            new_pos[1] = min(self.height - 1, new_pos[1] + 1)
-        elif action == 'Down':
-            new_pos[1] = max(0, new_pos[1] - 1)
-        elif action == 'Left':
-            new_pos[0] = max(0, new_pos[0] - 1)
-        elif action == 'Right':
-            new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+        if action == 'TurnLeft':
+            left_turn = {
+                'Up': 'Left',
+                'Left': 'Down',
+                'Down': 'Right',
+                'Right': 'Up'
+            }
 
-        if tuple(new_pos) in self.walls:
-            self.score -= 5
-        else:
-            self.agent_pos = new_pos
+            self.facing = left_turn[self.facing]
+
+        elif action == 'TurnRight':
+            right_turn = {
+                'Up': 'Right',
+                'Right': 'Down',
+                'Down': 'Left',
+                'Left': 'Up'
+            }
+
+            self.facing = right_turn[self.facing]
+
+        elif action == 'MoveForward':
+            if self.facing == 'Up':
+                new_pos[1] += 1
+            elif self.facing == 'Down':
+                new_pos[1] -= 1
+            elif self.facing == 'Left':
+                new_pos[0] -= 1
+            elif self.facing == 'Right':
+                new_pos[0] += 1
+
+            outside_grid = (
+                new_pos[0] < 0
+                or new_pos[0] >= self.width
+                or new_pos[1] < 0
+                or new_pos[1] >= self.height
+            )
+
+            if outside_grid or tuple(new_pos) in self.walls:
+                self.score -= 5
+            else:
+                self.agent_pos = new_pos
+
+        elif action == 'Suck':
+            current_position = tuple(self.agent_pos)
+
+            if current_position in self.food_positions:
+                self.food_positions.remove(current_position)
+                self.score += 20
 
         tuple_pos = tuple(self.agent_pos)
 
         if tuple_pos in self.toxic_traps:
             self.score -= 15
-
-        if tuple_pos in self.food_positions:
-            self.food_positions.remove(tuple_pos)
-            self.score += 20
 
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
@@ -127,6 +231,8 @@ class GridGameGUI:
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
+        #self.agent = SimpleReflexAgent()
+        self.agent = ModelBasedAgent()
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -217,7 +323,8 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                percept = self.env.get_percept()
+                action = self.agent.sense_and_act(percept)
                 self.env.execute_action(action)
 
                 self.draw_grid()

@@ -1,6 +1,7 @@
 # visual_grid_game.py
 import random
 import tkinter as tk
+from agent import SearchAgent
 
 class SimpleReflexAgent:
     """An agent that uses only the current percept."""
@@ -111,6 +112,9 @@ class VisualGridHuntGame:
             ):
                 self.toxic_traps.add(trap_position)
 
+        self.opponents = []
+        self.toxic_traps = set()
+
         self.score = 0
         self.steps = 0
         self.collision = False
@@ -138,11 +142,18 @@ class VisualGridHuntGame:
             or next_y >= self.height
         )
 
-        # Return only local information
+        # Return local information and the global world model
         return {
             'wall_ahead': outside_grid or next_position in self.walls,
             'food_here': tuple(self.agent_pos) in self.food_positions,
-            'toxin_here': tuple(self.agent_pos) in self.toxic_traps
+            'toxin_here': tuple(self.agent_pos) in self.toxic_traps,
+
+            # Global information required by the search agent
+            'agent_pos': tuple(self.agent_pos),
+            'facing': self.facing,
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions)
         }
 
     def execute_action(self, action: str):
@@ -227,12 +238,22 @@ class GridGameGUI:
 
     def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None):
         self.root = root
-        self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
+        self.root.title("IT24101844 - Practical 03: Uninformed Search")
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
+
+        # Save the starting state for the Reset button
+        self.initial_food = set(self.env.food_positions)
+
+        # Hide previous-lab elements only for the Lab 3 comparison
+        # Their original code is not removed
+        self.env.opponents = []
+        self.env.toxic_traps = set()
+
         #self.agent = SimpleReflexAgent()
-        self.agent = ModelBasedAgent()
+        #self.agent = ModelBasedAgent()
+        self.agent = SearchAgent(active_algo='BFS')
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -247,11 +268,46 @@ class GridGameGUI:
         self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
 
-        self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
-                             fg="white")
-        self.btn.pack(pady=5)
+        button_frame = tk.Frame(root)
+        button_frame.pack(pady=5)
+
+        self.bfs_btn = tk.Button(
+            button_frame,
+            text="Run BFS",
+            command=lambda: self.run_algorithm('BFS')
+        )
+        self.bfs_btn.pack(side=tk.LEFT, padx=5)
+
+        self.dfs_btn = tk.Button(
+            button_frame,
+            text="Run DFS",
+            command=lambda: self.run_algorithm('DFS')
+        )
+        self.dfs_btn.pack(side=tk.LEFT, padx=5)
+
+        self.ucs_btn = tk.Button(
+            button_frame,
+            text="Run UCS",
+            command=lambda: self.run_algorithm('UCS')
+        )
+        self.ucs_btn.pack(side=tk.LEFT, padx=5)
+
+        self.reset_btn = tk.Button(
+            button_frame,
+            text="Reset",
+            command=self.reset_game
+        )
+        self.reset_btn.pack(side=tk.LEFT, padx=5)
+
+        self.algorithm_buttons = [
+            self.bfs_btn,
+            self.dfs_btn,
+            self.ucs_btn
+        ]
 
         self.draw_grid()
+
+
 
     def draw_grid(self):
         self.canvas.delete("all")
@@ -318,8 +374,37 @@ class GridGameGUI:
         self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.7, y1 + self.cell_size * 0.7, fill="#000066",
                                 outline="#1e3a8a")
 
+
+    def reset_game(self):
+        """Reset the existing environment without changing its original code."""
+
+        self.env.agent_pos = [0, 0]
+        self.env.facing = 'Up'
+        self.env.food_positions = set(self.initial_food)
+        self.env.score = 0
+        self.env.steps = 0
+        self.env.collision = False
+
+        # Keep previous-lab items hidden on this comparison screen
+        self.env.opponents = []
+        self.env.toxic_traps = set()
+
+        self.agent = SearchAgent(active_algo='BFS')
+
+        self.label.config(text="Score: 0 | Steps: 0")
+        self.draw_grid()
+
+
+    def run_algorithm(self, algorithm):
+        """Run the selected algorithm using the original map."""
+
+        self.reset_game()
+        self.agent = SearchAgent(active_algo=algorithm)
+        self.run_loop()
+
     def run_loop(self):
-        self.btn.config(state="disabled")
+        for button in self.algorithm_buttons:
+            button.config(state="disabled")
 
         def step():
             if not self.env.is_done():
@@ -333,7 +418,8 @@ class GridGameGUI:
             else:
                 end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
                 self.label.config(text=end_text)
-                self.btn.config(state="normal")
+                for button in self.algorithm_buttons:
+                    button.config(state="normal")
 
         step()
 
@@ -341,5 +427,5 @@ class GridGameGUI:
 if __name__ == "__main__":
     root = tk.Tk()
     # Try a larger grid size like 12x12 with 15 food and 3 opponents!
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=2)
+    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
     root.mainloop()

@@ -238,7 +238,7 @@ class GridGameGUI:
 
     def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None):
         self.root = root
-        self.root.title("IT24101844 - Practical 03: Uninformed Search")
+        self.root.title("IT24101844 - Practical 04: Informed Search")
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
@@ -253,7 +253,8 @@ class GridGameGUI:
 
         #self.agent = SimpleReflexAgent()
         #self.agent = ModelBasedAgent()
-        self.agent = SearchAgent(active_algo='BFS')
+        #self.agent = SearchAgent(active_algo='BFS')
+        self.agent = SearchAgent(active_algo='AStar')
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -292,6 +293,13 @@ class GridGameGUI:
         )
         self.ucs_btn.pack(side=tk.LEFT, padx=5)
 
+        self.astar_btn = tk.Button(
+            button_frame,
+            text="Run A*",
+            command=lambda: self.run_algorithm('AStar')
+        )
+        self.astar_btn.pack(side=tk.LEFT, padx=5)
+
         self.reset_btn = tk.Button(
             button_frame,
             text="Reset",
@@ -302,7 +310,8 @@ class GridGameGUI:
         self.algorithm_buttons = [
             self.bfs_btn,
             self.dfs_btn,
-            self.ucs_btn
+            self.ucs_btn,
+            self.astar_btn
         ]
 
         self.draw_grid()
@@ -389,7 +398,8 @@ class GridGameGUI:
         self.env.opponents = []
         self.env.toxic_traps = set()
 
-        self.agent = SearchAgent(active_algo='BFS')
+        #self.agent = SearchAgent(active_algo='BFS')
+        self.agent = SearchAgent(active_algo='AStar')
 
         self.label.config(text="Score: 0 | Steps: 0")
         self.draw_grid()

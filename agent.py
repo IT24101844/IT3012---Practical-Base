@@ -1,5 +1,6 @@
 # agent.py
 import random
+import math
 from collections import deque
 import heapq
 
@@ -49,6 +50,17 @@ class SearchAgent:
                 valid_neighbors.append((next_position, action))
 
         return valid_neighbors
+
+    def manhattan_distance(self, pos, goal):
+            """Calculate Manhattan distance between two positions."""
+            return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+            """Calculate Euclidean distance between two positions."""
+            return math.sqrt(
+                (pos[0] - goal[0]) ** 2
+                + (pos[1] - goal[1]) ** 2
+            )
 
     def bfs_search(self, start, goal, grid_size, walls):
         """Find the shortest path using Breadth-First Search."""
@@ -165,6 +177,77 @@ class SearchAgent:
                     # Return an empty list when no path exists
                     return []
 
+    def astar_search(self,start_pos,goal_pos,walls,grid_size,heuristic_type='manhattan'):
+            """Find the shortest path using A* Search."""
+
+            # Select the required heuristic function
+            if heuristic_type == 'manhattan':
+                heuristic = self.manhattan_distance
+
+            elif heuristic_type == 'euclidean':
+                heuristic = self.euclidean_distance
+
+            else:
+                raise ValueError(
+                    "Heuristic must be 'manhattan' or 'euclidean'"
+                )
+
+            # Store already explored positions
+            reached_states = set()
+
+            # Calculate the costs of the starting position
+            start_g_cost = 0
+            start_h_cost = heuristic(start_pos, goal_pos)
+            start_f_cost = start_g_cost + start_h_cost
+
+            # Queue format:
+            # (f_cost, g_cost, current_position, path_taken)
+            frontier = [
+                (start_f_cost, start_g_cost, start_pos, [])
+            ]
+
+            while frontier:
+                f_cost, g_cost, current_pos, path_taken = heapq.heappop(
+                    frontier
+                )
+
+                # Return the path when the goal is reached
+                if current_pos == goal_pos:
+                    return path_taken
+
+                # Ignore positions that were already explored
+                if current_pos in reached_states:
+                    continue
+
+                reached_states.add(current_pos)
+
+                # Get valid adjacent positions
+                neighbors = self.get_neighbors(
+                    current_pos,
+                    grid_size,
+                    walls
+                )
+
+                for next_pos, action in neighbors:
+                    if next_pos not in reached_states:
+                        new_g_cost = g_cost + 1
+                        new_h_cost = heuristic(next_pos, goal_pos)
+                        new_f_cost = new_g_cost + new_h_cost
+                        new_path = path_taken + [action]
+
+                        heapq.heappush(
+                            frontier,
+                            (
+                                new_f_cost,
+                                new_g_cost,
+                                next_pos,
+                                new_path
+                            )
+                        )
+
+            # Return an empty path if the goal cannot be reached
+            return []
+
 
     def convert_to_actions(self, movement_path, starting_facing):
                         """Convert Up/Down/Left/Right into turns and MoveForward actions."""
@@ -250,9 +333,18 @@ class SearchAgent:
                                     walls
                                 )
 
+                            elif self.active_algo == 'ASTAR':
+                                movement_path = self.astar_search(
+                                    start,
+                                    goal,
+                                    walls,
+                                    grid_size,
+                                    heuristic_type='manhattan'
+                                )
+
                             else:
                                 raise ValueError(
-                                    "active_algo must be 'BFS', 'DFS', or 'UCS'"
+                                    "active_algo must be 'BFS', 'DFS', 'UCS' or 'AStar'"
                                 )
 
                             # Convert directions into actions understood by the environment
